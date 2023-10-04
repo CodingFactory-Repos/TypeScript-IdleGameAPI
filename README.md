@@ -1,14 +1,13 @@
 # Mini Auth Starter
 
-
 L'idéal serait de créer de nouveaux modules pour faire le projet
 
 N'oubliez pas d'ajouter, d'utiliser vos controlleurs dans le fichier src/server.ts
 
-
 ## Routes auth
 
 ### POST /auth/register
+
 ```
 {
     "username": "example",
@@ -17,6 +16,7 @@ N'oubliez pas d'ajouter, d'utiliser vos controlleurs dans le fichier src/server.
 ```
 
 ### POST /auth/login
+
 ```
 {
     "username": "example",
@@ -25,3 +25,5 @@ N'oubliez pas d'ajouter, d'utiliser vos controlleurs dans le fichier src/server.
 ```
 
 ### GET /auth/me
+
+test
