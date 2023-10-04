@@ -1,0 +1,17 @@
+import { AuthRegisterBody } from "@/types/auth.types";
+import { Express, Request, Response } from "express";
+import { getAllShopItems } from "./shop.services";
+
+export function registerShopRoutes(app: Express) {
+
+    // on enregistre une route /auth/register
+    // .                                        TypeParams, TypeQuery, TypeBody
+    app.get('/shop', async (_req: Request<unknown, unknown, AuthRegisterBody>, res: Response) => {
+
+        // on call le service auth.register
+        const result = await getAllShopItems()
+
+        // on reponds a la requete http avec le result
+        res.json(result)
+    })
+}
