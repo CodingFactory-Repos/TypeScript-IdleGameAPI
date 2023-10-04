@@ -1,6 +1,6 @@
 import { AuthRegisterBody } from "@/types/auth.types";
 import { Express, Request, Response } from "express";
-import { getAllShopItems } from "./shop.services";
+import {buyShopItem, getAllShopItems} from "./shop.services";
 
 export function registerShopRoutes(app: Express) {
 
@@ -14,4 +14,10 @@ export function registerShopRoutes(app: Express) {
         // on reponds a la requete http avec le result
         res.json(result)
     })
+
+    app.post('/shop/buy', async (req, res) => {
+        const result = await buyShopItem(req.body)
+
+        res.json(result)
+    });
 }

@@ -14,3 +14,7 @@ export interface SimpleUser {
     username: string
     createdAt: Date
 }
+
+export interface AuthUserToken {
+    token: string
+}
