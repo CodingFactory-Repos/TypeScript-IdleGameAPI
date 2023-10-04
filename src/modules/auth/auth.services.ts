@@ -59,3 +59,12 @@ export function findByToken(token: string): Promise<WithId<SimpleUser> | null> {
         { projection: { password: 0, token: 0 } }
     );
 }
+
+export async function findByReqHeaderToken(req: any) {
+    const user: WithId<SimpleUser> | null = await findByToken(req.headers.token as string);
+    if (!user) {
+        return null;
+    }
+
+    return user;
+}

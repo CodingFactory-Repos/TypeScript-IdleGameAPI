@@ -16,7 +16,7 @@ export function registerShopRoutes(app: Express) {
     })
 
     app.post('/shop/buy', async (req, res) => {
-        const result = await buyShopItem(req.body)
+        const result = await buyShopItem(req)
 
         res.json(result)
     });
