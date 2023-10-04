@@ -3,7 +3,7 @@ import {buyItem, ReturnedShop, Shop} from "@/types/shop.types";
 import axios, {AxiosResponse} from "axios";
 import {SimpleUser} from "@/types/auth.types";
 import {findByToken} from "@/modules/auth/auth.services";
-import {WithId} from "mongodb";
+import {ObjectId, WithId} from "mongodb";
 
 export async function getAllShopItems(): Promise<ReturnedShop[]> {
     let allItems: Promise<Shop[]> = Shops.find().toArray();
@@ -38,7 +38,7 @@ export async function buyShopItem(body: buyItem) {
     }
 
     // Get item from id
-    const item = Shops.find({_id: body.id}).toArray();
+    const item = await Shops.findOne<Shop>({ _id: new ObjectId(body.id) });
 
     // Check if user has enough money
     return [item, user];

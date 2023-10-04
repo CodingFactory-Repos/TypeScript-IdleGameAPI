@@ -1,5 +1,4 @@
 import {AuthUserToken} from "@/types/auth.types";
-import {Condition, ObjectId} from "mongodb";
 
 export interface Shop {
     name: string
@@ -16,5 +15,5 @@ export interface ReturnedShop extends Shop {
 }
 
 export interface buyItem extends AuthUserToken {
-    id: Condition<ObjectId>
+    id: string
 }
