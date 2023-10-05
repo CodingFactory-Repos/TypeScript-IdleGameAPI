@@ -3,7 +3,6 @@ import { Express, Request, Response } from "express";
 import { WithId } from "mongodb";
 import { requireLogin } from "../auth/auth.middleware";
 import { Inventory } from "@/db/models/Inventory";
-import { Shops } from "@/db/models/Shop";
 import { getItemsFarm, levelUpItem } from "./inventory.services";
 
 export function registerInventoryRoutes(app: Express) {
@@ -25,14 +24,9 @@ export function registerInventoryRoutes(app: Express) {
 
             if (!inventory) {
                 return res.status(404).json({ message: "Inventory not found" });
-            }
+            }         
 
-            // get the user inventory items id's and get the items from the shop
-            const items = await Shops.find({
-                _id: { $in: inventory.items.map((item) => item.item_id) },
-            }).toArray();
-
-            return res.json({ items });
+            return res.json({ ...inventory });
         }
     );
 
