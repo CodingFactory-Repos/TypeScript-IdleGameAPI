@@ -75,10 +75,10 @@ export async function buyShopItem(
         await updateUserAfterBuy(user, item);
 
         // Update user XP
-        await updateUserXP(user, item.xp);
+        await updateUserXP(user, item.xp || 0);
 
         // Update user slots
-        await updateUserSlots(user, item.xp);
+        await updateUserSlots(user, item.xp || 0);
 
         // Add item to user inventory
         await addItemToInventory(req);

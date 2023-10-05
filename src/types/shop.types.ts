@@ -7,7 +7,7 @@ export interface Shop {
     generate_per_seconds: number;
     eur_to: string;
     slots: number;
-    xp: number;
+    xp?: number;
     level_up_cost: number;
 }
 
