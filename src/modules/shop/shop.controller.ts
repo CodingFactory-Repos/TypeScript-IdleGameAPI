@@ -1,6 +1,7 @@
 import { AuthRegisterBody } from "@/types/auth.types";
 import { Express, Request, Response } from "express";
 import { buyShopItem, getAllShopItems } from "./shop.services";
+import {requireLogin} from "@/modules/auth/auth.middleware";
 
 export function registerShopRoutes(app: Express) {
     // on enregistre une route /auth/register
@@ -19,7 +20,7 @@ export function registerShopRoutes(app: Express) {
         }
     );
 
-    app.post("/shop/buy-item", async (req, res) => {
+    app.post("/shop/buy-item", requireLogin, async (req, res) => {
         const result = await buyShopItem(req);
 
         res.json(result);

@@ -1,7 +1,6 @@
 import { SimpleUser } from "@/types/auth.types";
 import { Express, Request, Response } from "express";
 import { WithId } from "mongodb";
-import { findByReqHeaderToken } from "../auth/auth.services";
 import { requireLogin } from "../auth/auth.middleware";
 import { Inventory } from "@/db/models/Inventory";
 import { Shops } from "@/db/models/Shop";
@@ -13,19 +12,14 @@ export function registerInventoryRoutes(app: Express) {
         requireLogin,
         async (req: Request, res: Response) => {
             // get the header token
-            const user: WithId<SimpleUser> | null = await findByReqHeaderToken(
-                req
-            );
-            if (!user) {
-                return res.status(401).json({ message: "Unauthorized" });
-            }
+            const user = req?.user as WithId<SimpleUser>;
 
             const inventory = await Inventory.findOne({
                 user_id: user._id,
             });
 
             if (!inventory) {
-                return res.status(404).json({ message: "Inventory not found" });
+                return res.status(404).json({message: "Inventory not found"});
             }
 
             // get the user inventory items id's and get the items from the shop
@@ -33,7 +27,7 @@ export function registerInventoryRoutes(app: Express) {
                 _id: { $in: inventory.items.map((item) => item.item_id) },
             }).toArray();
 
-            return res.json({ items });
+            return res.json({items});
         }
     );
 
@@ -42,12 +36,7 @@ export function registerInventoryRoutes(app: Express) {
         requireLogin,
         async (req: Request, res: Response) => {
             // get the header token
-            const user: WithId<SimpleUser> | null = await findByReqHeaderToken(
-                req
-            );
-            if (!user) {
-                return res.status(401).json({ message: "Unauthorized" });
-            }
+            const user: WithId<SimpleUser> | null = req.user as WithId<SimpleUser>;
 
             const { row_id } = req.body;
 

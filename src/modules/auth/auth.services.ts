@@ -67,17 +67,6 @@ export function findByToken(token: string): Promise<WithId<SimpleUser> | null> {
     );
 }
 
-export async function findByReqHeaderToken(req: any) {
-    const user: WithId<SimpleUser> | null = await findByToken(
-        req.headers.token as string
-    );
-    if (!user) {
-        return null;
-    }
-
-    return user;
-}
-
 export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: Shop) {
     const cryptoPrice = await getCryptoPrice(item.eur_to);
     const ItemPriceInCrypto = item.price / cryptoPrice;

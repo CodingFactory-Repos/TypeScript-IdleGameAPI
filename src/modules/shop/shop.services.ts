@@ -3,7 +3,6 @@ import { buyItem, ReturnedShop, Shop } from "@/types/shop.types";
 import axios, { AxiosResponse } from "axios";
 import { SimpleUser } from "@/types/auth.types";
 import {
-    findByReqHeaderToken,
     updateUserAfterBuy,
     updateUserSlots,
     updateUserXP,
@@ -52,10 +51,7 @@ export async function buyShopItem(
     req: Request<{}, any, any, ParsedQs, Record<string, any>>
 ): Promise<any> {
     // Get user from token
-    const user: WithId<SimpleUser> | null = await findByReqHeaderToken(req);
-    if (!user) {
-        return { message: "Unauthorized" };
-    }
+    const user: WithId<SimpleUser> = req.user as WithId<SimpleUser>;
     const body: buyItem = req.body;
 
     // Get item from id

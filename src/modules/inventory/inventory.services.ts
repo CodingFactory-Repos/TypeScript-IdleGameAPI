@@ -5,12 +5,11 @@ import { InventoryType } from "@/types/inventory.types";
 import { buyItem } from "@/types/shop.types";
 import { Request } from "express";
 import { ObjectId, WithId } from "mongodb";
-import { findByReqHeaderToken } from "../auth/auth.services";
 
 export async function addItemToInventory(
     req: Request
 ): Promise<InventoryType | null | { message: string }> {
-    const user: WithId<SimpleUser> | null = await findByReqHeaderToken(req);
+    const user = req.user as WithId<SimpleUser>;
     if (!user) {
         return { message: "Unauthorized" };
     }
