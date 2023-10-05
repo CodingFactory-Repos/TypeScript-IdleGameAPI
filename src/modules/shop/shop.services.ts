@@ -67,8 +67,12 @@ export async function buyShopItem(
 
     if (item) {
         // Check if user has enough slots
-        if (inventory?.items?.length >= user.slots_number) {
+        if (inventory?.items?.length + 1 >= user.slots_number) {
             return { message: "Not enough slots" };
+        }
+
+        if (user.money < item.price) {
+            return { message: "Not enough money" };
         }
 
         // Update user slots, money

@@ -2,10 +2,10 @@ import {AuthRegisterBody, SimpleUser} from "@/types/auth.types";
 import {Users} from "@/db/models/User";
 import {Inventory} from "@/db/models/Inventory";
 import crypto from "crypto";
-import {WithId} from "mongodb";
-import {getCryptoPrice} from "../shop/shop.services";
-import {Shop} from "@/types/shop.types";
 import {Marketplace} from "@/types/marketplace.types";
+import { WithId } from "mongodb";
+import { getAllShopItems, getCryptoPrice } from "../shop/shop.services";
+import { Shop } from "@/types/shop.types";
 
 export async function register(body: AuthRegisterBody) {
     const alreadyExist = await Users.findOne({username: body.username});
@@ -19,12 +19,21 @@ export async function register(body: AuthRegisterBody) {
         .digest("hex");
     const token = crypto.randomBytes(32).toString("hex");
 
+    // get the item with the lowest price
+    const items = await getAllShopItems();
+    const lowestPriceItem = items.reduce((prev, current) =>
+        prev.price < current.price ? prev : current
+    );
+
+    // get the crypto price of the lowest price item
+    const cryptoPrice = await getCryptoPrice(lowestPriceItem.eur_to);
+
     const user = await Users.insertOne({
         username: body.username,
         password: hashedPassword,
         token: token.toString(),
         createdAt: new Date(),
-        money: 100,
+        money: (lowestPriceItem.price * 1.2) / cryptoPrice,
         slots_number: 10,
         used_slots: 0,
         level: 1,
