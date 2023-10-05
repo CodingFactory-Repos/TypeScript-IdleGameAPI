@@ -7,7 +7,6 @@ export interface SimpleUser {
     username: string;
     createdAt: Date;
     money: number;
-    inventory: Array<object>;
     slots_number: number;
     used_slots: number;
     level: number;

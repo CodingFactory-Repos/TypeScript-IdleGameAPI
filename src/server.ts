@@ -4,7 +4,7 @@ import cookieParser from "cookie-parser";
 import { registerAuthRoutes } from "./modules/auth/auth.controller";
 import { isLogin } from "./modules/auth/auth.middleware";
 import { registerShopRoutes } from "@/modules/shop/shop.controller";
-import { registerUserRoutes } from "./modules/user/user.controller";
+import { registerInventoryRoutes } from "./modules/inventory/inventory.controller";
 
 export function initWebServer() {
     // Creation du serveur http
@@ -29,7 +29,7 @@ export function initWebServer() {
     // On enregistre nos controllers
     registerAuthRoutes(app);
     registerShopRoutes(app);
-    registerUserRoutes(app);
+    registerInventoryRoutes(app);
 
     // On ecoute sur le port configuré avec le .env
     app.listen(process.env.NODE_PORT, () => {

@@ -1,11 +1,19 @@
-import {Shops} from "@/db/models/Shop";
-import {buyItem, ReturnedShop, Shop} from "@/types/shop.types";
-import axios, {AxiosResponse} from "axios";
-import {SimpleUser} from "@/types/auth.types";
-import {findByReqHeaderToken} from "@/modules/auth/auth.services";
-import {ObjectId, WithId} from "mongodb";
-import {Request} from "express-serve-static-core";
-import {ParsedQs} from "qs";
+import { Shops } from "@/db/models/Shop";
+import { buyItem, ReturnedShop, Shop } from "@/types/shop.types";
+import axios, { AxiosResponse } from "axios";
+import { SimpleUser } from "@/types/auth.types";
+import {
+    findByReqHeaderToken,
+    updateUserAfterBuy,
+    updateUserSlots,
+    updateUserXP,
+} from "@/modules/auth/auth.services";
+import { ObjectId, WithId } from "mongodb";
+import { Request } from "express-serve-static-core";
+import { ParsedQs } from "qs";
+import { Inventory } from "@/db/models/Inventory";
+import { InventoryType } from "@/types/inventory.types";
+import { addItemToInventory } from "../inventory/inventory.services";
 
 export async function getAllShopItems(): Promise<ReturnedShop[]> {
     let allItems: Promise<Shop[]> = Shops.find().toArray();
@@ -15,7 +23,10 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
         return items[0].eur_to;
     });
 
-    const btcPrice = await axios.get(`https://min-api.cryptocompare.com/data/pricehistorical?fsym=${firstItem}&tsyms=EUR`)
+    const btcPrice = await axios
+        .get(
+            `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${firstItem}&tsyms=EUR`
+        )
         .then((response: AxiosResponse<any>) => {
             return response.data.BTC.EUR;
         });
@@ -26,23 +37,57 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
             return {
                 ...item,
                 price_in_crypto: item.price / btcPrice,
-                generate_per_seconds_in_crypto: item.generate_per_seconds / btcPrice,
-            }
+                generate_per_seconds_in_crypto:
+                    item.generate_per_seconds / btcPrice,
+            };
         });
     });
 }
 
-export async function buyShopItem(req: Request<{}, any, any, ParsedQs, Record<string, any>>): Promise<any> {
+export async function buyShopItem(
+    req: Request<{}, any, any, ParsedQs, Record<string, any>>
+): Promise<any> {
     // Get user from token
     const user: WithId<SimpleUser> | null = await findByReqHeaderToken(req);
     if (!user) {
-        return {message: "Unauthorized"};
+        return { message: "Unauthorized" };
     }
     const body: buyItem = req.body;
 
     // Get item from id
     const item = await Shops.findOne<Shop>({ _id: new ObjectId(body.id) });
 
+    // Get user inventory and add item
+    const inventory = await Inventory.findOne<InventoryType>({
+        user_id: user._id,
+    });
+    if (!inventory) {
+        return { message: "Inventory not found" };
+    }
+
+    if (item) {
+        // Check if user has enough slots
+        if (inventory?.items_id?.length >= user.slots_number) {
+            return { message: "Not enough slots" };
+        }
+
+        // Update user slots, money
+        await updateUserAfterBuy(user, item);
+
+        // Update user XP
+        await updateUserXP(user, item.xp);
+
+        // Update user slots
+        await updateUserSlots(user, item.xp);
+
+        // Add item to user inventory
+        await addItemToInventory(req);
+
+        return { message: "Item bought" };
+    } else {
+        return { message: "Item not found" };
+    }
+
     // Check if user has enough money
-    return [item, user]
+    return [item, user];
 }
