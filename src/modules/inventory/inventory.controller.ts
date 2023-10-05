@@ -61,7 +61,11 @@ export function registerInventoryRoutes(app: Express) {
 
             const levelUp = await levelUpItem(user._id, item_id, row_id)
                 .then((result) => {
-                    return res.json({ message: result.message });
+                    if (typeof result === "string") {
+                        return res.status(500).json({ message: result });
+                    } else {
+                        return res.status(200).json(result);
+                    }
                 })
                 .catch((err) => {
                     return res.status(500).json({ message: err });

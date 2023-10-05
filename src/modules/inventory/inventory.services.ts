@@ -230,6 +230,10 @@ export async function levelUpItem(
 
     const newLevel = item.level + 1;
 
+    if (user.money < shopItem.price * multiplier_money) {
+        return { message: "You don't have enough money" };
+    }
+
     const updatedItems = inventory.items.map((invItem) => {
         if (
             invItem.item_id.toString() === item_id.toString() &&
@@ -255,5 +259,5 @@ export async function levelUpItem(
 
     updateUserXP(user, (shopItem.xp || 0) / 2);
 
-    return { message: "Item leveled up" };
+    return updatedItems;
 }

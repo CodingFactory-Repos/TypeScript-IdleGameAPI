@@ -71,7 +71,10 @@ export async function buyShopItem(
             return { message: "Not enough slots" };
         }
 
-        if (user.money < item.price) {
+        const cryptoPrice = await getCryptoPrice(item.eur_to);
+        const ItemPriceInCrypto = item.price / cryptoPrice;
+
+        if (user.money < ItemPriceInCrypto) {
             return { message: "Not enough money" };
         }
 
