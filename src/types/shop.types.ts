@@ -8,6 +8,7 @@ export interface Shop {
     eur_to: string;
     slots: number;
     xp: number;
+    level_up_cost: number;
 }
 
 export interface ReturnedShop extends Shop {

@@ -3,6 +3,8 @@ import { Users } from "@/db/models/User";
 import { Inventory } from "@/db/models/Inventory";
 import crypto from "crypto";
 import { WithId } from "mongodb";
+import { getCryptoPrice } from "../shop/shop.services";
+import { Shop } from "@/types/shop.types";
 
 export async function register(body: AuthRegisterBody) {
     const alreadyExist = await Users.findOne({ username: body.username });
@@ -32,7 +34,7 @@ export async function register(body: AuthRegisterBody) {
 
     await Inventory.insertOne({
         user_id: user.insertedId,
-        items_id: [],
+        items: [],
     });
 
     return { success: true, token };
@@ -76,9 +78,12 @@ export async function findByReqHeaderToken(req: any) {
     return user;
 }
 
-export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: any) {
+export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: Shop) {
+    const cryptoPrice = await getCryptoPrice(item.eur_to);
+    const ItemPriceInCrypto = item.price / cryptoPrice;
+
     // Check if user has enough money
-    if (user.money < item.price) {
+    if (user.money < ItemPriceInCrypto) {
         return { message: "Not enough money" };
     }
 
@@ -87,7 +92,7 @@ export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: any) {
         {
             $set: {
                 used_slots: user.used_slots + 1,
-                money: user.money - item.price,
+                money: user.money - ItemPriceInCrypto,
             },
         }
     );

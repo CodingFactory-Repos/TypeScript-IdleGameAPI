@@ -23,13 +23,7 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
         return items[0].eur_to;
     });
 
-    const btcPrice = await axios
-        .get(
-            `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${firstItem}&tsyms=EUR`
-        )
-        .then((response: AxiosResponse<any>) => {
-            return response.data.BTC.EUR;
-        });
+    const btcPrice = await getCryptoPrice(firstItem);
 
     // Add new field to each item with actual price in BTC and convert to ReturnedShop
     return await allItems.then((items: Shop[]) => {
@@ -42,6 +36,16 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
             };
         });
     });
+}
+
+export async function getCryptoPrice(crypto: string): Promise<number> {
+    return await axios
+        .get(
+            `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${crypto}&tsyms=EUR`
+        )
+        .then((response: AxiosResponse<any>) => {
+            return response.data[crypto].EUR;
+        });
 }
 
 export async function buyShopItem(
@@ -67,7 +71,7 @@ export async function buyShopItem(
 
     if (item) {
         // Check if user has enough slots
-        if (inventory?.items_id?.length >= user.slots_number) {
+        if (inventory?.items?.length >= user.slots_number) {
             return { message: "Not enough slots" };
         }
 
