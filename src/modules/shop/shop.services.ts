@@ -3,7 +3,6 @@ import { buyItem, ReturnedShop, Shop } from "@/types/shop.types";
 import axios, { AxiosResponse } from "axios";
 import { SimpleUser } from "@/types/auth.types";
 import {
-    findByReqHeaderToken,
     updateUserAfterBuy,
     updateUserSlots,
     updateUserXP,
@@ -23,13 +22,7 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
         return items[0].eur_to;
     });
 
-    const btcPrice = await axios
-        .get(
-            `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${firstItem}&tsyms=EUR`
-        )
-        .then((response: AxiosResponse<any>) => {
-            return response.data.BTC.EUR;
-        });
+    const btcPrice = await getCryptoPrice(firstItem);
 
     // Add new field to each item with actual price in BTC and convert to ReturnedShop
     return await allItems.then((items: Shop[]) => {
@@ -44,14 +37,21 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
     });
 }
 
+export async function getCryptoPrice(crypto: string): Promise<number> {
+    return await axios
+        .get(
+            `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${crypto}&tsyms=EUR`
+        )
+        .then((response: AxiosResponse<any>) => {
+            return response.data[crypto].EUR;
+        });
+}
+
 export async function buyShopItem(
     req: Request<{}, any, any, ParsedQs, Record<string, any>>
 ): Promise<any> {
     // Get user from token
-    const user: WithId<SimpleUser> | null = await findByReqHeaderToken(req);
-    if (!user) {
-        return { message: "Unauthorized" };
-    }
+    const user: WithId<SimpleUser> = req.user as WithId<SimpleUser>;
     const body: buyItem = req.body;
 
     // Get item from id
@@ -67,18 +67,25 @@ export async function buyShopItem(
 
     if (item) {
         // Check if user has enough slots
-        if (inventory?.items_id?.length >= user.slots_number) {
+        if (inventory?.items?.length + 1 >= user.slots_number) {
             return { message: "Not enough slots" };
+        }
+
+        const cryptoPrice = await getCryptoPrice(item.eur_to);
+        const ItemPriceInCrypto = item.price / cryptoPrice;
+
+        if (user.money < ItemPriceInCrypto) {
+            return { message: "Not enough money" };
         }
 
         // Update user slots, money
         await updateUserAfterBuy(user, item);
 
         // Update user XP
-        await updateUserXP(user, item.xp);
+        await updateUserXP(user, item.xp || 0);
 
         // Update user slots
-        await updateUserSlots(user, item.xp);
+        await updateUserSlots(user, item.xp || 0);
 
         // Add item to user inventory
         await addItemToInventory(req);
@@ -87,7 +94,4 @@ export async function buyShopItem(
     } else {
         return { message: "Item not found" };
     }
-
-    // Check if user has enough money
-    return [item, user];
 }

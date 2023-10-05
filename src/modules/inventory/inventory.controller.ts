@@ -1,10 +1,9 @@
 import { SimpleUser } from "@/types/auth.types";
 import { Express, Request, Response } from "express";
 import { WithId } from "mongodb";
-import { findByReqHeaderToken } from "../auth/auth.services";
 import { requireLogin } from "../auth/auth.middleware";
 import { Inventory } from "@/db/models/Inventory";
-import { Shops } from "@/db/models/Shop";
+import { getItemsFarm, levelUpItem } from "./inventory.services";
 
 export function registerInventoryRoutes(app: Express) {
     app.get(
@@ -12,9 +11,9 @@ export function registerInventoryRoutes(app: Express) {
         requireLogin,
         async (req: Request, res: Response) => {
             // get the header token
-            const user: WithId<SimpleUser> | null = await findByReqHeaderToken(
-                req
-            );
+            const user: WithId<SimpleUser> | null =
+                req.user as WithId<SimpleUser>;
+
             if (!user) {
                 return res.status(401).json({ message: "Unauthorized" });
             }
@@ -27,12 +26,52 @@ export function registerInventoryRoutes(app: Express) {
                 return res.status(404).json({ message: "Inventory not found" });
             }
 
-            // get the user inventory items id's and get the items from the shop
-            const items = await Shops.find({
-                _id: { $in: inventory.items_id },
-            }).toArray();
+            return res.json({ ...inventory });
+        }
+    );
 
-            return res.json({ items });
+    app.get(
+        "user/item-reward",
+        requireLogin,
+        async (req: Request, res: Response) => {
+            const user: WithId<SimpleUser> | null =
+                req.user as WithId<SimpleUser>;
+
+            if (!user) {
+                return res.status(401).json({ message: "Unauthorized" });
+            }
+
+            const { row_id, item_id } = req.body;
+
+            await getItemsFarm(req, item_id, row_id);
+
+            return res.json({ message: "Item reward successful" });
+        }
+    );
+
+    app.post(
+        "/inventory/item-level-up",
+        requireLogin,
+        async (req: Request, res: Response) => {
+            // get the header token
+            const user: WithId<SimpleUser> | null =
+                req.user as WithId<SimpleUser>;
+
+            const { row_id, item_id } = req.body;
+
+            const levelUp = await levelUpItem(user._id, item_id, row_id)
+                .then((result) => {
+                    if (typeof result === "string") {
+                        return res.status(500).json({ message: result });
+                    } else {
+                        return res.status(200).json(result);
+                    }
+                })
+                .catch((err) => {
+                    return res.status(500).json({ message: err });
+                });
+
+            return levelUp;
         }
     );
 }

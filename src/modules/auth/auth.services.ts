@@ -1,13 +1,16 @@
-import { AuthRegisterBody, SimpleUser } from "@/types/auth.types";
-import { Users } from "@/db/models/User";
-import { Inventory } from "@/db/models/Inventory";
+import {AuthRegisterBody, SimpleUser} from "@/types/auth.types";
+import {Users} from "@/db/models/User";
+import {Inventory} from "@/db/models/Inventory";
 import crypto from "crypto";
+import {Marketplace} from "@/types/marketplace.types";
 import { WithId } from "mongodb";
+import { getAllShopItems, getCryptoPrice } from "../shop/shop.services";
+import { Shop } from "@/types/shop.types";
 
 export async function register(body: AuthRegisterBody) {
-    const alreadyExist = await Users.findOne({ username: body.username });
+    const alreadyExist = await Users.findOne({username: body.username});
     if (alreadyExist) {
-        return { success: false, message: "User already exists" };
+        return {success: false, message: "User already exists"};
     }
 
     const hashedPassword = crypto
@@ -16,12 +19,21 @@ export async function register(body: AuthRegisterBody) {
         .digest("hex");
     const token = crypto.randomBytes(32).toString("hex");
 
+    // get the item with the lowest price
+    const items = await getAllShopItems();
+    const lowestPriceItem = items.reduce((prev, current) =>
+        prev.price < current.price ? prev : current
+    );
+
+    // get the crypto price of the lowest price item
+    const cryptoPrice = await getCryptoPrice(lowestPriceItem.eur_to);
+
     const user = await Users.insertOne({
         username: body.username,
         password: hashedPassword,
         token: token.toString(),
         createdAt: new Date(),
-        money: 100,
+        money: (lowestPriceItem.price * 1.2) / cryptoPrice,
         slots_number: 10,
         used_slots: 0,
         level: 1,
@@ -32,16 +44,16 @@ export async function register(body: AuthRegisterBody) {
 
     await Inventory.insertOne({
         user_id: user.insertedId,
-        items_id: [],
+        items: [],
     });
 
-    return { success: true, token };
+    return {success: true, token};
 }
 
 export async function login(body: AuthRegisterBody) {
-    const user = await Users.findOne({ username: body.username });
+    const user = await Users.findOne({username: body.username});
     if (!user) {
-        return { success: false, message: "Bad password" };
+        return {success: false, message: "Bad password"};
     }
 
     const hashedPassword = crypto
@@ -49,56 +61,62 @@ export async function login(body: AuthRegisterBody) {
         .update(body.password)
         .digest("hex");
     if (user.password !== hashedPassword) {
-        return { success: false, message: "Bad password" };
+        return {success: false, message: "Bad password"};
     }
 
     const token = crypto.randomBytes(32).toString("hex");
-    await Users.updateOne({ _id: user._id }, { $set: { token } });
+    await Users.updateOne({_id: user._id}, {$set: {token}});
 
-    return { success: true, token };
+    return {success: true, token};
 }
 
 export function findByToken(token: string): Promise<WithId<SimpleUser> | null> {
     return Users.findOne<WithId<SimpleUser>>(
-        { token },
-        { projection: { password: 0, token: 0 } }
+        {token},
+        {projection: {password: 0, token: 0}}
     );
 }
 
-export async function findByReqHeaderToken(req: any) {
-    const user: WithId<SimpleUser> | null = await findByToken(
-        req.headers.token as string
-    );
-    if (!user) {
-        return null;
-    }
+export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: Shop | Marketplace, action: "buy" | "sell" = "buy") {
+    const cryptoPrice = await getCryptoPrice(item.eur_to);
+    const ItemPriceInCrypto = item.price / cryptoPrice;
 
-    return user;
-}
-
-export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: any) {
-    // Check if user has enough money
-    if (user.money < item.price) {
-        return { message: "Not enough money" };
-    }
-
-    await Users.updateOne(
-        { _id: user._id },
-        {
-            $set: {
-                used_slots: user.used_slots + 1,
-                money: user.money - item.price,
-            },
+    if (action === "buy") {
+        // Check if user has enough money
+        if (user.money < ItemPriceInCrypto) {
+            return {message: "Not enough money"};
         }
-    );
 
-    return { message: "Item bought successfully" };
+        await Users.updateOne(
+            {_id: user._id},
+            {
+                $set: {
+                    used_slots: user.used_slots + 1,
+                    money: user.money - ItemPriceInCrypto,
+                },
+            }
+        );
+    } else if (action === "sell") {
+        await Users.updateOne(
+            {_id: user._id},
+            {
+                $set: {
+                    used_slots: user.used_slots - 1,
+                    money: user.money + ItemPriceInCrypto,
+                },
+            }
+        );
+    } else {
+        return {message: "Action not found"};
+    }
+
+    return {message: "Item as been " + action + " successful"};
 }
 
 export async function updateUserXP(user: WithId<SimpleUser>, xp: number) {
     if (user.xp + xp >= user.xp_to_next_level) {
-        const newUser = await Users.findOneAndUpdate(
-            { _id: user._id },
+        return await Users.findOneAndUpdate(
+            {_id: user._id},
             {
                 $set: {
                     xp: user.xp + xp - user.xp_to_next_level,
@@ -107,19 +125,15 @@ export async function updateUserXP(user: WithId<SimpleUser>, xp: number) {
                 },
             }
         );
-
-        return newUser;
     } else {
-        const newUser = await Users.findOneAndUpdate(
-            { _id: user._id },
+        return await Users.findOneAndUpdate(
+            {_id: user._id},
             {
                 $set: {
                     xp: user.xp + xp,
                 },
             }
         );
-
-        return newUser;
     }
 }
 
@@ -140,13 +154,22 @@ export async function updateUserXP(user: WithId<SimpleUser>, xp: number) {
 //     return { message: "Daily reward claimed" };
 // }
 
-export async function updateUserSlots(user: WithId<SimpleUser>, xp: number) {
+export async function updateUserSlots(user: WithId<SimpleUser>, xp: number, action: "buy" | "sell" = "buy") {
     if (user.xp + xp >= user.xp_to_next_level) {
-        await Users.updateOne(
-            { _id: user._id },
-            { $set: { slots_number: user.slots_number + 5 } }
-        );
+        if (action == "buy") {
+            await Users.updateOne(
+                {_id: user._id},
+                {$set: {slots_number: user.slots_number + 5}}
+            );
+        } else if (action == "sell") {
+            await Users.updateOne(
+                {_id: user._id},
+                {$set: {slots_number: user.slots_number - 5}}
+            );
+        } else {
+            return {message: "Action not found"};
+        }
     }
 
-    return { message: "Slots updated" };
+    return {message: "Slots updated"};
 }
