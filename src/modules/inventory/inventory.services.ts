@@ -1,5 +1,6 @@
 import { Inventory } from "@/db/models/Inventory";
 import { Shops } from "@/db/models/Shop";
+import { Users } from "@/db/models/User";
 import { SimpleUser } from "@/types/auth.types";
 import { InventoryType } from "@/types/inventory.types";
 import { buyItem } from "@/types/shop.types";
@@ -38,9 +39,7 @@ export async function addItemToInventory(
                     row_id: new ObjectId(),
                     item_id: item._id,
                     level: 1,
-                    total_farmed: 0,
-                    canLevelUp: false,
-                    level_up_cost: item.generate_per_seconds * 10,
+                    last_reward: new Date(),
                 },
             },
         }
@@ -50,67 +49,139 @@ export async function addItemToInventory(
 }
 
 // for each item in inventory, update the total_farmed every 30 seconds
-export async function updateItemFarm() {
-    const user: WithId<SimpleUser> | null = await findByReqHeaderToken({
-        headers: {
-            token: "6ccb5e31be052c0691749bd3d97813e08742624c1037cd84f74b262d0ce9b15e",
-        },
-    });
+// export async function updateItemFarm(req: Request) {
+//     const user: WithId<SimpleUser> | null = req.user as WithId<SimpleUser>;
+
+//     const user_id = user._id;
+
+//     const inventory = await Inventory.findOne({ user_id: user_id });
+
+//     if (!inventory) {
+//         return { message: "Inventory not found" };
+//     }
+
+//     const item = inventory.items.find(
+//         (item) => item.row_id.toString() === req.body.row_id
+//     );
+
+//     if (!item) {
+//         return { message: "Item not found" };
+//     }
+
+//     // get the shop item, look the last_reward and calculate the total_farmed since then and add to the user money and update the last_reward
+//     const shopItem = await Shops.findOne({
+//         _id: item?.item_id,
+//         row_id: item?.row_id,
+//     });
+
+//     if (!shopItem) {
+//         return { message: "Shop item not found" };
+//     }
+
+//     const now = new Date();
+
+//     const timeDiff = now.getTime() - item?.last_reward?.getTime();
+
+//     const secondsDiff = timeDiff / 1000;
+
+//     const totalFarmed = secondsDiff * shopItem.generate_per_seconds;
+
+//     const newMoney = user.money + totalFarmed;
+
+//     await User.updateOne({ _id: user_id }, { $set: { money: newMoney } });
+
+//     await Inventory.updateOne(
+//         { user_id: user_id },
+//         { $set: { items: { ...item, last_reward: now } } }
+//     );
+
+//     return { message: "Inventory updated" };
+// }
+
+export async function getItemsFarm(
+    req: Request,
+    item_id: ObjectId,
+    row_id: ObjectId
+) {
+    const user: WithId<SimpleUser> | null = req.user as WithId<SimpleUser>;
+
     if (!user) {
-        return { message: "Unauthorized" };
+        return { message: "User not found" };
     }
 
-    const user_id = user._id;
-
-    const inventory = await Inventory.findOne({
-        user_id: user_id,
-    });
+    const inventory = await Inventory.findOne({ user_id: user._id });
 
     if (!inventory) {
         return { message: "Inventory not found" };
     }
 
-    if (!inventory.items) {
-        return [];
+    const item = inventory.items.find(
+        (item) =>
+            item.item_id.toString() === item_id.toString() &&
+            item.row_id.toString() === row_id.toString()
+    );
+
+    if (!item) {
+        return { message: "Item not found" };
     }
 
-    const shopItems = await Shops.find({
-        _id: { $in: inventory.items.map((item) => item.item_id) },
-    }).toArray();
+    // get the shop item, look the last_reward and calculate the total_farmed since then and add to the user money and update the last_reward
+    const shopItem = await Shops.findOne({
+        _id: item.item_id,
+        row_id: item.row_id,
+    });
 
-    const newItems = inventory?.items?.map((item) => {
-        const shopItem = shopItems.find(
-            (shopItem) => shopItem._id.toString() === item.item_id.toString()
-        );
-        if (!shopItem) {
-            return item;
+    if (!shopItem) {
+        return { message: "Shop item not found" };
+    }
+
+    const now = new Date();
+
+    const timeDiff = now.getTime() - item.last_reward.getTime();
+
+    const secondsDiff = timeDiff / 1000;
+
+    const totalFarmed =
+        secondsDiff *
+        (shopItem.generate_per_seconds +
+            (item.level - 1) * 0.1 * shopItem.generate_per_seconds);
+
+    const newMoney = user.money + totalFarmed;
+
+    await Users.updateOne({ _id: user._id }, { $set: { money: newMoney } });
+
+    const updatedItems = inventory.items.map((invItem) => {
+        if (
+            invItem.item_id.toString() === item_id.toString() &&
+            invItem.row_id.toString() === row_id.toString()
+        ) {
+            return {
+                ...invItem,
+                last_reward: now,
+            };
         }
-
-        const newTotalFarmedString =
-            item.total_farmed + shopItem.generate_per_seconds;
-
-        // Check if item can level up
-        let canLevelUp = false;
-        if (item.level_up_cost <= newTotalFarmedString) {
-            canLevelUp = true;
-        }
-
-        return {
-            ...item,
-            total_farmed: newTotalFarmedString,
-            canLevelUp,
-        };
+        return invItem;
     });
 
     await Inventory.updateOne(
-        { user_id: user_id },
-        { $set: { items: newItems } }
+        { user_id: user._id },
+        { $set: { items: updatedItems } }
     );
 
     return { message: "Inventory updated" };
 }
 
-export async function onItemLevelUp(user_id: ObjectId, row_id: ObjectId) {
+export async function levelUpItem(
+    user_id: ObjectId,
+    item_id: ObjectId,
+    row_id: ObjectId
+) {
+    const user = await Users.findOne({ _id: user_id });
+
+    if (!user) {
+        return { message: "User not found" };
+    }
+
     const inventory = await Inventory.findOne({ user_id: user_id });
 
     if (!inventory) {
@@ -118,50 +189,59 @@ export async function onItemLevelUp(user_id: ObjectId, row_id: ObjectId) {
     }
 
     const item = inventory.items.find(
-        (item) => item.row_id.toString() === row_id.toString()
+        (item) =>
+            item.item_id.toString() === item_id.toString() &&
+            item.row_id.toString() === row_id.toString()
     );
 
     if (!item) {
         return { message: "Item not found" };
     }
 
-    if (!item.canLevelUp) {
-        return { message: "Item can't level up" };
-    }
-
-    const shopItem = await Shops.findOne({
-        _id: item.item_id,
-    });
+    const shopItem = await Shops.findOne({ _id: item.item_id });
 
     if (!shopItem) {
         return { message: "Shop item not found" };
     }
 
-    const newInventory = await Inventory.findOneAndUpdate(
-        {
-            user_id: user_id,
-            "items.row_id": row_id,
-        },
-        {
-            $set: {
-                "items.$.level": item.level + 1,
-                "items.$.level_up_cost":
-                    (item.level_up_cost + shopItem.generate_per_seconds) * 10,
-            },
+    const multiplier_money = (item.level + 1) / 10 + 1;
+
+    const newLevel = item.level + 1;
+
+    const updatedItems = inventory.items.map((invItem) => {
+        if (
+            invItem.item_id.toString() === item_id.toString() &&
+            invItem.row_id.toString() === row_id.toString()
+        ) {
+            return {
+                ...invItem,
+                level: newLevel,
+            };
         }
+        return invItem;
+    });
+
+    await Inventory.updateOne(
+        { user_id: user_id },
+        { $set: { items: updatedItems } }
     );
 
-    return newInventory;
+    await Users.updateOne(
+        { _id: user_id },
+        { $set: { money: user.money - shopItem.price * multiplier_money } }
+    );
+
+    return { message: "Item leveled up" };
 }
 
 // Call updateItemFarm() every 30 seconds
-setInterval(async () => {
-    try {
-        await updateItemFarm();
-        console.log("Updated inventory");
-        return { success: true };
-    } catch (error) {
-        console.error(error);
-        return { message: "An error occurred" };
-    }
-}, 10000);
+// setInterval(async () => {
+//     try {
+//         await updateItemFarm();
+//         console.log("Updated inventory");
+//         return { success: true };
+//     } catch (error) {
+//         console.error(error);
+//         return { message: "An error occurred" };
+//     }
+// }, 10000);

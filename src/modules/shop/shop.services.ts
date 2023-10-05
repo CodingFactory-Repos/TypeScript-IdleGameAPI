@@ -87,7 +87,4 @@ export async function buyShopItem(
     } else {
         return { message: "Item not found" };
     }
-
-    // Check if user has enough money
-    return [item, user];
 }
