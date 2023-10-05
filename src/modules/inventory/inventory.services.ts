@@ -6,6 +6,7 @@ import { InventoryType } from "@/types/inventory.types";
 import { buyItem } from "@/types/shop.types";
 import { Request } from "express";
 import { ObjectId, WithId } from "mongodb";
+import { updateUserXP } from "../auth/auth.services";
 
 export async function addItemToInventory(
     req: Request
@@ -139,6 +140,10 @@ export async function getItemsFarm(
 
     const timeDiff = now.getTime() - item.last_reward.getTime();
 
+    if (timeDiff < 1800000) {
+        return { message: "You can't get the reward yet" };
+    }
+
     const secondsDiff = timeDiff / 1000;
 
     const totalFarmed =
@@ -231,17 +236,7 @@ export async function levelUpItem(
         { $set: { money: user.money - shopItem.price * multiplier_money } }
     );
 
+    updateUserXP(user, shopItem.xp / 2);
+
     return { message: "Item leveled up" };
 }
-
-// Call updateItemFarm() every 30 seconds
-// setInterval(async () => {
-//     try {
-//         await updateItemFarm();
-//         console.log("Updated inventory");
-//         return { success: true };
-//     } catch (error) {
-//         console.error(error);
-//         return { message: "An error occurred" };
-//     }
-// }, 10000);

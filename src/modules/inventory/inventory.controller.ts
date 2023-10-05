@@ -24,7 +24,7 @@ export function registerInventoryRoutes(app: Express) {
 
             if (!inventory) {
                 return res.status(404).json({ message: "Inventory not found" });
-            }         
+            }
 
             return res.json({ ...inventory });
         }
