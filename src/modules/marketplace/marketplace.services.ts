@@ -13,6 +13,7 @@ import {addItemToInventory} from "../inventory/inventory.services";
 import {getCryptoPrice} from "@/modules/shop/shop.services";
 import {buyItem, Shop} from "@/types/shop.types";
 import {Shops} from "@/db/models/Shop";
+import * as console from "console";
 
 /**
  * Get all marketplace items
@@ -95,7 +96,7 @@ export async function sellMarketplaceItem(
     const body: buyItem = req.body;
 
     // Get item from id
-    const item = await Marketplaces.findOne<Marketplace>({_id: new ObjectId(body.id)});
+    const item = await Shops.findOne<Shop>({_id: new ObjectId(body.id)});
 
     // Get user inventory and check if item exists in inventory
     const inventory = await Inventory.findOne<InventoryType>({
@@ -105,6 +106,8 @@ export async function sellMarketplaceItem(
         return {message: "Inventory not found"};
     }
 
+    console.log(item);
+
     if (item) {
         // Check if item exists in inventory
         const itemExists = inventory.items.find((item) => {
@@ -113,6 +116,8 @@ export async function sellMarketplaceItem(
         if (!itemExists) {
             return {message: "Item not found in inventory"};
         }
+
+        console.log(itemExists);
 
         // Update user slots, money
         await updateUserAfterBuy(user, item, "sell");
@@ -163,7 +168,7 @@ export async function addItemToMarketplace(
             image: item.image,
             price: body.price,
             eur_to: item.eur_to,
-            generate_per_seconds: (item.generate_per_seconds + (itemStats.level - 1) * 0.1 * item.generate_per_seconds),
+            generate_per_seconds: item.generate_per_seconds,
             level: itemStats.level,
             selledBy: new ObjectId(user._id),
         });

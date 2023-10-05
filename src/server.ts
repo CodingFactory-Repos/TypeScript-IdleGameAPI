@@ -5,6 +5,7 @@ import { registerAuthRoutes } from "./modules/auth/auth.controller";
 import { isLogin } from "./modules/auth/auth.middleware";
 import { registerShopRoutes } from "@/modules/shop/shop.controller";
 import { registerInventoryRoutes } from "./modules/inventory/inventory.controller";
+import {registerMarketplaceRoutes} from "@/modules/marketplace/marketplace.controller";
 
 export function initWebServer() {
     // Creation du serveur http
@@ -30,6 +31,7 @@ export function initWebServer() {
     registerAuthRoutes(app);
     registerShopRoutes(app);
     registerInventoryRoutes(app);
+    registerMarketplaceRoutes(app);
 
     // On ecoute sur le port configuré avec le .env
     app.listen(process.env.NODE_PORT, () => {
