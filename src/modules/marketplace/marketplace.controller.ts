@@ -3,7 +3,7 @@ import { Express, Request, Response } from "express";
 import {buyMarketplaceItem, getAllMarketplaceItems, sellMarketplaceItem} from "./marketplace.services";
 import {requireLogin} from "@/modules/auth/auth.middleware";
 
-export function registerShopRoutes(app: Express) {
+export function registerMarketplaceRoutes(app: Express) {
     // on enregistre une route /auth/register
     // TypeParams, TypeQuery, TypeBody
     app.get(

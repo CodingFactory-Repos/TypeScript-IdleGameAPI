@@ -40,6 +40,9 @@ export async function register(body: AuthRegisterBody) {
         xp: 0,
         xp_to_next_level: 100,
         last_daily: 0,
+        hasTenBTC: false,
+        hasGraphicsCard: false
+
     });
 
     await Inventory.insertOne({
@@ -77,9 +80,9 @@ export function findByToken(token: string): Promise<WithId<SimpleUser> | null> {
     );
 }
 
-export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: Shop | Marketplace, action: "buy" | "sell" = "buy") {
+export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: Shop | Marketplace, action: "buy" | "sell" = "buy", itemPrice: number | undefined = undefined) {
     const cryptoPrice = await getCryptoPrice(item.eur_to);
-    const ItemPriceInCrypto = item.price / cryptoPrice;
+    const ItemPriceInCrypto = (itemPrice ? itemPrice : item.price) / cryptoPrice;
 
     if (action === "buy") {
         // Check if user has enough money
@@ -102,7 +105,6 @@ export async function updateUserAfterBuy(user: WithId<SimpleUser>, item: Shop | 
             {
                 $set: {
                     used_slots: user.used_slots - 1,
-                    money: user.money + ItemPriceInCrypto,
                 },
             }
         );

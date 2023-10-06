@@ -1,18 +1,14 @@
-import { Shops } from "@/db/models/Shop";
-import { buyItem, ReturnedShop, Shop } from "@/types/shop.types";
-import axios, { AxiosResponse } from "axios";
-import { SimpleUser } from "@/types/auth.types";
-import {
-    updateUserAfterBuy,
-    updateUserSlots,
-    updateUserXP,
-} from "@/modules/auth/auth.services";
-import { ObjectId, WithId } from "mongodb";
-import { Request } from "express-serve-static-core";
-import { ParsedQs } from "qs";
-import { Inventory } from "@/db/models/Inventory";
-import { InventoryType } from "@/types/inventory.types";
-import { addItemToInventory } from "../inventory/inventory.services";
+import {Shops} from "@/db/models/Shop";
+import {buyItem, ReturnedShop, Shop} from "@/types/shop.types";
+import axios from "axios";
+import {SimpleUser} from "@/types/auth.types";
+import {updateUserAfterBuy, updateUserSlots, updateUserXP,} from "@/modules/auth/auth.services";
+import {ObjectId, WithId} from "mongodb";
+import {Request} from "express-serve-static-core";
+import {ParsedQs} from "qs";
+import {Inventory} from "@/db/models/Inventory";
+import {InventoryType} from "@/types/inventory.types";
+import {addItemToInventory} from "../inventory/inventory.services";
 
 export async function getAllShopItems(): Promise<ReturnedShop[]> {
     let allItems: Promise<Shop[]> = Shops.find().toArray();
@@ -37,45 +33,47 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
     });
 }
 
-export async function getCryptoPrice(crypto: string): Promise<number> {
-    return await axios
-        .get(
-            `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${crypto}&tsyms=EUR`
-        )
-        .then((response: AxiosResponse<any>) => {
-            return response.data[crypto].EUR;
-        });
+export async function getCryptoPrice(crypto: string) {
+    const response = await axios.get(
+        `https://min-api.cryptocompare.com/data/price?fsym=${crypto}&tsyms=EUR`
+    );
+
+    if (!response.data.EUR) {
+        throw new Error(`Crypto price not found for ${crypto}`);
+    }
+
+    return response.data.EUR;
 }
 
 export async function buyShopItem(
-    req: Request<{}, any, any, ParsedQs, Record<string, any>>
+    req: Request<{}, any, any, ParsedQs, Record<string, any>>,
 ): Promise<any> {
     // Get user from token
     const user: WithId<SimpleUser> = req.user as WithId<SimpleUser>;
     const body: buyItem = req.body;
 
     // Get item from id
-    const item = await Shops.findOne<Shop>({ _id: new ObjectId(body.id) });
+    const item = await Shops.findOne<Shop>({_id: new ObjectId(body.id)});
 
     // Get user inventory and add item
     const inventory = await Inventory.findOne<InventoryType>({
         user_id: user._id,
     });
     if (!inventory) {
-        return { message: "Inventory not found" };
+        return {message: "Inventory not found"};
     }
 
     if (item) {
         // Check if user has enough slots
-        if (inventory?.items?.length + 1 >= user.slots_number) {
-            return { message: "Not enough slots" };
+        if (inventory?.items?.length >= user.slots_number) {
+            return {message: "Not enough slots"};
         }
 
         const cryptoPrice = await getCryptoPrice(item.eur_to);
         const ItemPriceInCrypto = item.price / cryptoPrice;
 
         if (user.money < ItemPriceInCrypto) {
-            return { message: "Not enough money" };
+            return {message: "Not enough money"};
         }
 
         // Update user slots, money
@@ -88,10 +86,10 @@ export async function buyShopItem(
         await updateUserSlots(user, item.xp || 0);
 
         // Add item to user inventory
-        await addItemToInventory(req);
+        await addItemToInventory(req, "add");
 
-        return { message: "Item bought" };
+        return {message: "Item bought"};
     } else {
-        return { message: "Item not found" };
+        return {message: "Item not found"};
     }
 }
