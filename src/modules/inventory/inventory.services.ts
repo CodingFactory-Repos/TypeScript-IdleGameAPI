@@ -1,13 +1,15 @@
-import { Inventory } from "@/db/models/Inventory";
-import { Shops } from "@/db/models/Shop";
-import { Users } from "@/db/models/User";
-import { SimpleUser } from "@/types/auth.types";
-import { InventoryType } from "@/types/inventory.types";
-import { Request } from "express";
-import { ObjectId, UpdateResult, WithId } from "mongodb";
-import { updateUserXP } from "../auth/auth.services";
-import { getCryptoPrice } from "../shop/shop.services";
-import { Shop } from "@/types/shop.types";
+import {Inventory} from "@/db/models/Inventory";
+import {Shops} from "@/db/models/Shop";
+import {Users} from "@/db/models/User";
+import {SimpleUser} from "@/types/auth.types";
+import {InventoryType} from "@/types/inventory.types";
+import {Request} from "express";
+import {ObjectId, UpdateResult, WithId} from "mongodb";
+import {updateUserXP} from "../auth/auth.services";
+import {getCryptoPrice} from "../shop/shop.services";
+import {Shop} from "@/types/shop.types";
+import {Marketplaces} from "@/db/models/Marketplace";
+import {Marketplace} from "@/types/marketplace.types";
 
 export async function getAllInventoryItems(user: WithId<SimpleUser>) {
     const inventory = await Inventory.findOne({
@@ -46,17 +48,19 @@ export async function getAllInventoryItems(user: WithId<SimpleUser>) {
 
     return Promise.all(items);
 }
+
 export async function addItemToInventory(
     req: Request,
-    action: "add" | "remove" = "add"
+    action: "add" | "remove" = "add",
+    from: "marketplace" | "shop" = "shop"
 ): Promise<
     InventoryType | null | UpdateResult<InventoryType> | { message: string }
 > {
     const user = req.user as WithId<SimpleUser>;
     if (!user) {
-        return { message: "Unauthorized" };
+        return {message: "Unauthorized"};
     }
-    const { id } = req.body;
+    let {id} = req.body;
     const inventory = await Inventory.findOne({
         user_id: user._id,
     });
@@ -65,17 +69,28 @@ export async function addItemToInventory(
         return null;
     }
 
-    const item = await Shops.findOne<WithId<Shop>>({
-        _id: new ObjectId(id),
-    });
+    let item;
+    if (from === "marketplace") {
+        item = await Marketplaces.findOne<Marketplace>({_id: new ObjectId(id)});
+        if (!item) {
+            return {message: "Item not found"};
+        }
+
+        item = await Shops.findOne<WithId<Shop>>({_id: new ObjectId(item.itemShopId)});
+    } else {
+        item = await Shops.findOne<WithId<Shop>>({
+            _id: new ObjectId(id),
+        });
+    }
+
     if (!item) {
-        return { message: "Item not found" };
+        return {message: "Item not found"};
     }
 
     let newInventory: UpdateResult<InventoryType> | InventoryType | null = null;
     if (action === "add") {
         newInventory = await Inventory.findOneAndUpdate(
-            { user_id: user._id },
+            {user_id: user._id},
             {
                 $push: {
                     items: {
@@ -104,8 +119,8 @@ export async function addItemToInventory(
         actualInventory.splice(index, 1);
 
         newInventory = await Inventory.updateOne(
-            { user_id: user._id },
-            { $set: { items: actualInventory } }
+            {user_id: user._id},
+            {$set: {items: actualInventory}}
         );
     } else {
         return null;
@@ -119,10 +134,10 @@ export async function getItemsFarm(
     item_id: ObjectId,
     row_id: ObjectId
 ) {
-    const inventory = await Inventory.findOne({ user_id: user._id });
+    const inventory = await Inventory.findOne({user_id: user._id});
 
     if (!inventory) {
-        return { message: "Inventory not found" };
+        return {message: "Inventory not found"};
     }
 
     const item = inventory.items.find(
@@ -132,7 +147,7 @@ export async function getItemsFarm(
     );
 
     if (!item) {
-        return { message: "Item not found" };
+        return {message: "Item not found"};
     }
 
     // get the shop item, look the last_reward and calculate the total_farmed since then and add to the user money and update the last_reward
@@ -142,7 +157,7 @@ export async function getItemsFarm(
     });
 
     if (!shopItem) {
-        return { message: "Shop item not found" };
+        return {message: "Shop item not found"};
     }
 
     const now = new Date();
@@ -170,7 +185,7 @@ export async function getItemsFarm(
 
     const newMoney = user.money + totalFarmed;
 
-    await Users.updateOne({ _id: user._id }, { $set: { money: newMoney } });
+    await Users.updateOne({_id: user._id}, {$set: {money: newMoney}});
 
     const updatedItems = inventory.items.map((invItem) => {
         if (
@@ -186,11 +201,11 @@ export async function getItemsFarm(
     });
 
     await Inventory.updateOne(
-        { user_id: user._id },
-        { $set: { items: updatedItems } }
+        {user_id: user._id},
+        {$set: {items: updatedItems}}
     );
 
-    return { message: "Inventory updated" };
+    return {message: "Inventory updated"};
 }
 
 export async function levelUpItem(
@@ -198,16 +213,16 @@ export async function levelUpItem(
     item_id: ObjectId,
     row_id: ObjectId
 ) {
-    const user = await Users.findOne({ _id: user_id });
+    const user = await Users.findOne({_id: user_id});
 
     if (!user) {
-        return { message: "User not found" };
+        return {message: "User not found"};
     }
 
-    const inventory = await Inventory.findOne({ user_id: user_id });
+    const inventory = await Inventory.findOne({user_id: user_id});
 
     if (!inventory) {
-        return { message: "Inventory not found" };
+        return {message: "Inventory not found"};
     }
 
     const item = inventory.items.find(
@@ -217,13 +232,13 @@ export async function levelUpItem(
     );
 
     if (!item) {
-        return { message: "Item not found" };
+        return {message: "Item not found"};
     }
 
-    const shopItem = await Shops.findOne({ _id: item.item_id });
+    const shopItem = await Shops.findOne({_id: item.item_id});
 
     if (!shopItem) {
-        return { message: "Shop item not found" };
+        return {message: "Shop item not found"};
     }
 
     const multiplier_money = (item.level + 1) / 10 + 1;
@@ -233,7 +248,7 @@ export async function levelUpItem(
     const price_in_crypto = await getCryptoPrice(shopItem.eur_to);
 
     if (user.money < (shopItem.price / price_in_crypto) * multiplier_money) {
-        return { message: "You don't have enough money" };
+        return {message: "You don't have enough money"};
     }
 
     const updatedItems = inventory.items.map((invItem) => {
@@ -254,12 +269,12 @@ export async function levelUpItem(
     });
 
     await Inventory.updateOne(
-        { user_id: user_id },
-        { $set: { items: updatedItems } }
+        {user_id: user_id},
+        {$set: {items: updatedItems}}
     );
 
     await Users.updateOne(
-        { _id: user_id },
+        {_id: user_id},
         {
             $set: {
                 money:

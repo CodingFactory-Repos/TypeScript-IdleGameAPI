@@ -1,9 +1,7 @@
 import {Marketplaces} from "@/db/models/Marketplace";
-import {ReturnedMarketplace, Marketplace} from "@/types/marketplace.types";
+import {Marketplace, ReturnedMarketplace} from "@/types/marketplace.types";
 import {SimpleUser} from "@/types/auth.types";
-import {
-    updateUserAfterBuy,
-} from "@/modules/auth/auth.services";
+import {updateUserAfterBuy,} from "@/modules/auth/auth.services";
 import {ObjectId, WithId} from "mongodb";
 import {Request} from "express-serve-static-core";
 import {ParsedQs} from "qs";
@@ -154,11 +152,18 @@ export async function buyMarketplaceItem(
         // Update user slots
         // await updateUserSlots(user, item.xp || 0);
 
-        await refundItemToSeller(req);
+        await refundItemToSeller(req)
+            .then((e) => {
+                console.log(e);
+            });
 
-        await addItemToInventory(req);
+        await addItemToInventory(req, "add", "marketplace").then((e) => {
+            console.log(e);
+        });
 
-        await removeItemFromMarketplace(req);
+        await removeItemFromMarketplace(req).then((e) => {
+            console.log(e);
+        });
 
         return {message: "Item bought"};
     } else {
@@ -194,19 +199,19 @@ export async function sellMarketplaceItem(
         }
 
         // Update user slots, money
-        await updateUserAfterBuy(user, item, "sell");
-
-        // Update user XP
-        // await updateUserXP(user, item.xp);
-
-        // Update user slots
-        // await updateUserSlots(user, undefined, "sell");
+        await updateUserAfterBuy(user, item, "sell").then((e) => {
+            console.log(e);
+        });
 
         // Add item to marketplace
-        await addItemToMarketplace(req);
+        await addItemToMarketplace(req).then((e) => {
+            console.log(e);
+        });
 
         // Remove item from user inventory
-        await addItemToInventory(req, "remove");
+        await addItemToInventory(req, "remove").then((e) => {
+            console.log(e);
+        });
 
         return {message: "Item sold"};
     }
