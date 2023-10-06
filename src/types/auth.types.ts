@@ -13,6 +13,9 @@ export interface SimpleUser {
     xp: number;
     xp_to_next_level: number;
     last_daily: number;
+    hasTenBTC: boolean;
+    hasGraphicsCard: boolean;
+
 }
 
 export interface User extends SimpleUser, AuthUserToken {

@@ -40,6 +40,9 @@ export async function register(body: AuthRegisterBody) {
         xp: 0,
         xp_to_next_level: 100,
         last_daily: 0,
+        hasTenBTC: false,
+        hasGraphicsCard: false
+
     });
 
     await Inventory.insertOne({
