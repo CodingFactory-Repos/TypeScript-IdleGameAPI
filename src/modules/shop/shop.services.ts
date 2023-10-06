@@ -1,6 +1,6 @@
 import { Shops } from "@/db/models/Shop";
 import { buyItem, ReturnedShop, Shop } from "@/types/shop.types";
-import axios, { AxiosResponse } from "axios";
+import axios from "axios";
 import { SimpleUser } from "@/types/auth.types";
 import {
     updateUserAfterBuy,
@@ -37,14 +37,16 @@ export async function getAllShopItems(): Promise<ReturnedShop[]> {
     });
 }
 
-export async function getCryptoPrice(crypto: string): Promise<number> {
-    return await axios
-        .get(
-            `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${crypto}&tsyms=EUR`
-        )
-        .then((response: AxiosResponse<any>) => {
-            return response.data[crypto].EUR;
-        });
+export async function getCryptoPrice(crypto: string) {
+    const response = await axios.get(
+        `https://min-api.cryptocompare.com/data/price?fsym=${crypto}&tsyms=EUR`
+    );
+
+    if (!response.data.EUR) {
+        throw new Error(`Crypto price not found for ${crypto}`);
+    }
+
+    return response.data.EUR;
 }
 
 export async function buyShopItem(

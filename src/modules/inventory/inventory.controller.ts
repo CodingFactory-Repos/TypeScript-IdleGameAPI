@@ -2,8 +2,12 @@ import { SimpleUser } from "@/types/auth.types";
 import { Express, Request, Response } from "express";
 import { WithId } from "mongodb";
 import { requireLogin } from "../auth/auth.middleware";
-import { Inventory } from "@/db/models/Inventory";
-import { getItemsFarm, levelUpItem } from "./inventory.services";
+// import { Inventory } from "@/db/models/Inventory";
+import {
+    getAllInventoryItems,
+    getItemsFarm,
+    levelUpItem,
+} from "./inventory.services";
 
 export function registerInventoryRoutes(app: Express) {
     app.get(
@@ -18,9 +22,11 @@ export function registerInventoryRoutes(app: Express) {
                 return res.status(401).json({ message: "Unauthorized" });
             }
 
-            const inventory = await Inventory.findOne({
-                user_id: user._id,
-            });
+            const inventory = await getAllInventoryItems(user);
+
+            // const inventory = await Inventory.findOne({
+            //     user_id: user._id,
+            // });
 
             if (!inventory) {
                 return res.status(404).json({ message: "Inventory not found" });
@@ -30,8 +36,8 @@ export function registerInventoryRoutes(app: Express) {
         }
     );
 
-    app.get(
-        "user/item-reward",
+    app.post(
+        "/inventory/item-reward",
         requireLogin,
         async (req: Request, res: Response) => {
             const user: WithId<SimpleUser> | null =
@@ -43,9 +49,9 @@ export function registerInventoryRoutes(app: Express) {
 
             const { row_id, item_id } = req.body;
 
-            await getItemsFarm(req, item_id, row_id);
+            const result = await getItemsFarm(user, item_id, row_id);
 
-            return res.json({ message: "Item reward successful" });
+            return res.json({ message: result.message });
         }
     );
 

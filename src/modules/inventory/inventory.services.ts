@@ -4,20 +4,60 @@ import { Users } from "@/db/models/User";
 import { SimpleUser } from "@/types/auth.types";
 import { InventoryType } from "@/types/inventory.types";
 import { Request } from "express";
-import {ObjectId, UpdateResult, WithId} from "mongodb";
+import { ObjectId, UpdateResult, WithId } from "mongodb";
 import { updateUserXP } from "../auth/auth.services";
-import {Marketplaces} from "@/db/models/Marketplace";
-import {Marketplace} from "@/types/marketplace.types";
+import { Marketplaces } from "@/db/models/Marketplace";
+import { Marketplace } from "@/types/marketplace.types";
+import { getCryptoPrice } from "../shop/shop.services";
 
+export async function getAllInventoryItems(user: WithId<SimpleUser>) {
+    const inventory = await Inventory.findOne({
+        user_id: user._id,
+    });
+
+    if (!inventory) {
+        return [];
+    }
+
+    const shop_item_info = await Shops.find().toArray();
+
+    const items = inventory.items.map(async (item) => {
+        const shopItem = shop_item_info.find(
+            (shopItem) => shopItem._id.toString() === item.item_id.toString()
+        );
+
+        if (!shopItem) {
+            return null;
+        }
+
+        const multiplier_money = (item.level + 1) / 10 + 1;
+        const price_in_crypto = await getCryptoPrice(shopItem.eur_to || "BTC");
+
+        return {
+            inventory_data: {
+                ...item,
+                upgrade_price: (
+                    (shopItem.price / price_in_crypto) *
+                    multiplier_money
+                ).toFixed(8),
+            },
+            shop_data: shopItem,
+        };
+    });
+
+    return Promise.all(items);
+}
 export async function addItemToInventory(
     req: Request,
     action: "add" | "remove" = "add"
-): Promise<InventoryType | null | UpdateResult<InventoryType> | {message: string}> {
+): Promise<
+    InventoryType | null | UpdateResult<InventoryType> | { message: string }
+> {
     const user = req.user as WithId<SimpleUser>;
     if (!user) {
-        return {message: "Unauthorized"};
+        return { message: "Unauthorized" };
     }
-    const {id} = req.body;
+    const { id } = req.body;
     const inventory = await Inventory.findOne({
         user_id: user._id,
     });
@@ -26,16 +66,17 @@ export async function addItemToInventory(
         return null;
     }
 
-    const item = await Marketplaces.findOne<Marketplace>({_id: new ObjectId(id.id)});
+    const item = await Marketplaces.findOne<Marketplace>({
+        _id: new ObjectId(id.id),
+    });
     if (!item) {
-        return {message: "Item not found"};
+        return { message: "Item not found" };
     }
-
 
     let newInventory: UpdateResult<InventoryType> | InventoryType | null = null;
     if (action === "add") {
         newInventory = await Inventory.findOneAndUpdate(
-            {user_id: user._id},
+            { user_id: user._id },
             {
                 $push: {
                     items: {
@@ -64,8 +105,8 @@ export async function addItemToInventory(
         actualInventory.splice(index, 1);
 
         newInventory = await Inventory.updateOne(
-            {user_id: user._id},
-            {$set: {items: actualInventory}}
+            { user_id: user._id },
+            { $set: { items: actualInventory } }
         );
     } else {
         return null;
@@ -74,71 +115,15 @@ export async function addItemToInventory(
     return newInventory;
 }
 
-// for each item in inventory, update the total_farmed every 30 seconds
-// export async function updateItemFarm(req: Request) {
-//     const user: WithId<SimpleUser> | null = req.user as WithId<SimpleUser>;
-
-//     const user_id = user._id;
-
-//     const inventory = await Inventory.findOne({ user_id: user_id });
-
-//     if (!inventory) {
-//         return { message: "Inventory not found" };
-//     }
-
-//     const item = inventory.items.find(
-//         (item) => item.row_id.toString() === req.body.row_id
-//     );
-
-//     if (!item) {
-//         return { message: "Item not found" };
-//     }
-
-//     // get the shop item, look the last_reward and calculate the total_farmed since then and add to the user money and update the last_reward
-//     const shopItem = await Shops.findOne({
-//         _id: item?.item_id,
-//         row_id: item?.row_id,
-//     });
-
-//     if (!shopItem) {
-//         return { message: "Shop item not found" };
-//     }
-
-//     const now = new Date();
-
-//     const timeDiff = now.getTime() - item?.last_reward?.getTime();
-
-//     const secondsDiff = timeDiff / 1000;
-
-//     const totalFarmed = secondsDiff * shopItem.generate_per_seconds;
-
-//     const newMoney = user.money + totalFarmed;
-
-//     await User.updateOne({ _id: user_id }, { $set: { money: newMoney } });
-
-//     await Inventory.updateOne(
-//         { user_id: user_id },
-//         { $set: { items: { ...item, last_reward: now } } }
-//     );
-
-//     return { message: "Inventory updated" };
-// }
-
 export async function getItemsFarm(
-    req: Request,
+    user: WithId<SimpleUser>,
     item_id: ObjectId,
     row_id: ObjectId
 ) {
-    const user: WithId<SimpleUser> | null = req.user as WithId<SimpleUser>;
-
-    if (!user) {
-        return {message: "User not found"};
-    }
-
-    const inventory = await Inventory.findOne({user_id: user._id});
+    const inventory = await Inventory.findOne({ user_id: user._id });
 
     if (!inventory) {
-        return {message: "Inventory not found"};
+        return { message: "Inventory not found" };
     }
 
     const item = inventory.items.find(
@@ -148,37 +133,45 @@ export async function getItemsFarm(
     );
 
     if (!item) {
-        return {message: "Item not found"};
+        return { message: "Item not found" };
     }
 
     // get the shop item, look the last_reward and calculate the total_farmed since then and add to the user money and update the last_reward
     const shopItem = await Shops.findOne({
         _id: item.item_id,
-        row_id: item.row_id,
+        // row_id: item.row_id,
     });
 
     if (!shopItem) {
-        return {message: "Shop item not found"};
+        return { message: "Shop item not found" };
     }
 
     const now = new Date();
 
     const timeDiff = now.getTime() - item.last_reward.getTime();
 
-    if (timeDiff < 1800000) {
-        return { message: "You can't get the reward yet" };
+    const interval = 1800000;
+
+    // 1800000
+    if (timeDiff < interval) {
+        return {
+            message: `You can't get the reward yet, wait ${
+                interval / 60000
+            } minutes`,
+        };
     }
 
-    const secondsDiff = timeDiff / 1000;
+    // 1hour
+    const hourDiff = timeDiff / 3600000;
 
     const totalFarmed =
-        secondsDiff *
+        hourDiff *
         (shopItem.generate_per_seconds +
             (item.level - 1) * 0.1 * shopItem.generate_per_seconds);
 
     const newMoney = user.money + totalFarmed;
 
-    await Users.updateOne({_id: user._id}, {$set: {money: newMoney}});
+    await Users.updateOne({ _id: user._id }, { $set: { money: newMoney } });
 
     const updatedItems = inventory.items.map((invItem) => {
         if (
@@ -194,11 +187,11 @@ export async function getItemsFarm(
     });
 
     await Inventory.updateOne(
-        {user_id: user._id},
-        {$set: {items: updatedItems}}
+        { user_id: user._id },
+        { $set: { items: updatedItems } }
     );
 
-    return {message: "Inventory updated"};
+    return { message: "Inventory updated" };
 }
 
 export async function levelUpItem(
@@ -206,16 +199,16 @@ export async function levelUpItem(
     item_id: ObjectId,
     row_id: ObjectId
 ) {
-    const user = await Users.findOne({_id: user_id});
+    const user = await Users.findOne({ _id: user_id });
 
     if (!user) {
-        return {message: "User not found"};
+        return { message: "User not found" };
     }
 
-    const inventory = await Inventory.findOne({user_id: user_id});
+    const inventory = await Inventory.findOne({ user_id: user_id });
 
     if (!inventory) {
-        return {message: "Inventory not found"};
+        return { message: "Inventory not found" };
     }
 
     const item = inventory.items.find(
@@ -225,22 +218,26 @@ export async function levelUpItem(
     );
 
     if (!item) {
-        return {message: "Item not found"};
+        return { message: "Item not found" };
     }
 
-    const shopItem = await Shops.findOne({_id: item.item_id});
+    const shopItem = await Shops.findOne({ _id: item.item_id });
 
     if (!shopItem) {
-        return {message: "Shop item not found"};
+        return { message: "Shop item not found" };
     }
 
     const multiplier_money = (item.level + 1) / 10 + 1;
 
     const newLevel = item.level + 1;
 
-    if (user.money < shopItem.price * multiplier_money) {
+    const price_in_crypto = await getCryptoPrice(shopItem.eur_to);
+
+    if (user.money < (shopItem.price / price_in_crypto) * multiplier_money) {
         return { message: "You don't have enough money" };
     }
+
+    console.log((shopItem.price / price_in_crypto) * multiplier_money);
 
     const updatedItems = inventory.items.map((invItem) => {
         if (
@@ -250,19 +247,29 @@ export async function levelUpItem(
             return {
                 ...invItem,
                 level: newLevel,
+                upgrade_price: (
+                    (shopItem.price / price_in_crypto) *
+                    multiplier_money
+                ).toFixed(8),
             };
         }
         return invItem;
     });
 
     await Inventory.updateOne(
-        {user_id: user_id},
-        {$set: {items: updatedItems}}
+        { user_id: user_id },
+        { $set: { items: updatedItems } }
     );
 
     await Users.updateOne(
-        {_id: user_id},
-        {$set: {money: user.money - shopItem.price * multiplier_money}}
+        { _id: user_id },
+        {
+            $set: {
+                money:
+                    user.money -
+                    (shopItem.price / price_in_crypto) * multiplier_money,
+            },
+        }
     );
 
     updateUserXP(user, (shopItem.xp || 0) / 2);
