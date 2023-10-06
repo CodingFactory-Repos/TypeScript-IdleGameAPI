@@ -90,7 +90,7 @@ export async function buyShopItem(
         await updateUserSlots(user, item.xp || 0);
 
         // Add item to user inventory
-        await addItemToInventory(req);
+        await addItemToInventory(req, "add");
 
         return { message: "Item bought" };
     } else {

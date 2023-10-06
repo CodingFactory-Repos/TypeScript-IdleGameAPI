@@ -6,9 +6,8 @@ import { InventoryType } from "@/types/inventory.types";
 import { Request } from "express";
 import { ObjectId, UpdateResult, WithId } from "mongodb";
 import { updateUserXP } from "../auth/auth.services";
-import { Marketplaces } from "@/db/models/Marketplace";
-import { Marketplace } from "@/types/marketplace.types";
 import { getCryptoPrice } from "../shop/shop.services";
+import { Shop } from "@/types/shop.types";
 
 export async function getAllInventoryItems(user: WithId<SimpleUser>) {
     const inventory = await Inventory.findOne({
@@ -66,8 +65,8 @@ export async function addItemToInventory(
         return null;
     }
 
-    const item = await Marketplaces.findOne<Marketplace>({
-        _id: new ObjectId(id.id),
+    const item = await Shops.findOne<WithId<Shop>>({
+        _id: new ObjectId(id),
     });
     if (!item) {
         return { message: "Item not found" };
@@ -81,7 +80,7 @@ export async function addItemToInventory(
                 $push: {
                     items: {
                         row_id: new ObjectId(),
-                        item_id: item.itemShopId,
+                        item_id: item._id,
                         level: 1,
                         last_reward: new Date(),
                     },
@@ -236,8 +235,6 @@ export async function levelUpItem(
     if (user.money < (shopItem.price / price_in_crypto) * multiplier_money) {
         return { message: "You don't have enough money" };
     }
-
-    console.log((shopItem.price / price_in_crypto) * multiplier_money);
 
     const updatedItems = inventory.items.map((invItem) => {
         if (
