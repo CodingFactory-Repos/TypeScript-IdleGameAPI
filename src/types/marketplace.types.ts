@@ -1,13 +1,14 @@
 import {ObjectId} from "mongodb";
 
 export interface Marketplace {
-    name: string;
-    image: string;
+    name: string; // Remove later
+    image: string; // Remove later
     price: number;
-    generate_per_seconds: number;
-    eur_to: string;
+    generate_per_seconds: number; // Remove later
+    eur_to: string; // Remove later
     level: number;
     selledBy: ObjectId;
+    itemShopId: ObjectId;
 }
 
 export interface ReturnedMarketplace extends Marketplace {

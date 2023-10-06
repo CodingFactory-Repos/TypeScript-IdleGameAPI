@@ -3,20 +3,21 @@ import { Shops } from "@/db/models/Shop";
 import { Users } from "@/db/models/User";
 import { SimpleUser } from "@/types/auth.types";
 import { InventoryType } from "@/types/inventory.types";
-import { buyItem } from "@/types/shop.types";
 import { Request } from "express";
-import { ObjectId, WithId } from "mongodb";
+import {ObjectId, UpdateResult, WithId} from "mongodb";
 import { updateUserXP } from "../auth/auth.services";
+import {Marketplaces} from "@/db/models/Marketplace";
+import {Marketplace} from "@/types/marketplace.types";
 
 export async function addItemToInventory(
     req: Request,
     action: "add" | "remove" = "add"
-): Promise<InventoryType | null | { message: string }> {
+): Promise<InventoryType | null | UpdateResult<InventoryType> | {message: string}> {
     const user = req.user as WithId<SimpleUser>;
     if (!user) {
         return {message: "Unauthorized"};
     }
-    const {id} = req.body as buyItem;
+    const {id} = req.body;
     const inventory = await Inventory.findOne({
         user_id: user._id,
     });
@@ -25,15 +26,13 @@ export async function addItemToInventory(
         return null;
     }
 
-    const item = await Shops.findOne({
-        _id: new ObjectId(id),
-    });
-
+    const item = await Marketplaces.findOne<Marketplace>({_id: new ObjectId(id.id)});
     if (!item) {
-        return null;
+        return {message: "Item not found"};
     }
 
-    let newInventory: InventoryType | null = null;
+
+    let newInventory: UpdateResult<InventoryType> | InventoryType | null = null;
     if (action === "add") {
         newInventory = await Inventory.findOneAndUpdate(
             {user_id: user._id},
@@ -41,7 +40,7 @@ export async function addItemToInventory(
                 $push: {
                     items: {
                         row_id: new ObjectId(),
-                        item_id: item._id,
+                        item_id: item.itemShopId,
                         level: 1,
                         last_reward: new Date(),
                     },
@@ -49,15 +48,24 @@ export async function addItemToInventory(
             }
         );
     } else if (action === "remove") {
-        newInventory = await Inventory.findOneAndUpdate(
+        // Remove only one item from the inventory
+        const actualInventory = inventory.items;
+
+        const itemToRemove = actualInventory.find(
+            (item) => item.item_id.toString() === id
+        );
+
+        if (!itemToRemove) {
+            return null;
+        }
+
+        const index = actualInventory.indexOf(itemToRemove);
+
+        actualInventory.splice(index, 1);
+
+        newInventory = await Inventory.updateOne(
             {user_id: user._id},
-            {
-                $pull: {
-                    items: {
-                        item_id: item._id,
-                    },
-                },
-            }
+            {$set: {items: actualInventory}}
         );
     } else {
         return null;

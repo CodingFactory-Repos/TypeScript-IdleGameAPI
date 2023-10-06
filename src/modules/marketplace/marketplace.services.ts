@@ -13,7 +13,7 @@ import {addItemToInventory} from "../inventory/inventory.services";
 import {getCryptoPrice} from "@/modules/shop/shop.services";
 import {buyItem, Shop} from "@/types/shop.types";
 import {Shops} from "@/db/models/Shop";
-import * as console from "console";
+import {Users} from "@/db/models/User";
 
 /**
  * Get all marketplace items
@@ -21,24 +21,94 @@ import * as console from "console";
 export async function getAllMarketplaceItems(): Promise<ReturnedMarketplace[]> {
     let allItems: Promise<Marketplace[]> = Marketplaces.find().toArray();
 
-    // Get the first item to get the currency to convert (eur_to)
-    const firstItem = await allItems.then((items: Marketplace[]) => {
-        return items[0].eur_to;
-    });
-
-    const btcPrice = await getCryptoPrice(firstItem);
-
-    // Add new field to each item with actual price in BTC and convert to ReturnedMarketplace
-    return await allItems.then((items: Marketplace[]) => {
-        return items.map((item: Marketplace) => {
-            return {
-                ...item,
-                price_in_crypto: item.price / btcPrice,
-                generate_per_seconds_in_crypto:
-                    item.generate_per_seconds / btcPrice,
-            };
+    try {
+        // Get the first item to get the currency to convert (eur_to)
+        const firstItem = await allItems.then((items: Marketplace[]) => {
+            return items[0].eur_to;
         });
+
+        const btcPrice = await getCryptoPrice(firstItem);
+
+        // Add new field to each item with actual price in BTC and convert to ReturnedMarketplace
+        return await allItems.then((items: Marketplace[]) => {
+            return items.map((item: Marketplace) => {
+                return {
+                    ...item,
+                    price_in_crypto: item.price / btcPrice,
+                    generate_per_seconds_in_crypto:
+                        item.generate_per_seconds / btcPrice,
+                };
+            });
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+async function refundItemToSeller(req: any) {
+    const body = req.body;
+
+    // Get item from id in Shop
+    const item = await Marketplaces.findOne<Marketplace>({_id: new ObjectId(body.id)});
+    if (!item) {
+        return {message: "Item not found"};
+    }
+
+    // Convert body.price to number and if it's not a number, return error
+    if (isNaN(Number(item.price))) {
+        return {message: "Price is not a number"};
+    } else {
+        item.price = Number(item.price);
+    }
+
+    const seller: SimpleUser | null = await Users.findOne<SimpleUser>({
+        _id: new ObjectId(item.selledBy),
     });
+
+    if (item) {
+        // Update seller money
+        await Users.findOneAndUpdate(
+            {_id: new ObjectId(item.selledBy)},
+            {
+                $set: {
+                    money: (seller?.money || 0) + item.price,
+                }
+            }
+        );
+
+        return true;
+    }
+
+    return false;
+}
+
+async function removeItemFromMarketplace(req: any) {
+    const body = req.body;
+
+    // Get item from id in Shop
+    const item = await Marketplaces.findOne<Marketplace>({_id: new ObjectId(body.id)});
+    if (!item) {
+        return {message: "Item not found"};
+    }
+
+    // Convert body.price to number and if it's not a number, return error
+    if (isNaN(Number(item.price))) {
+        return {message: "Price is not a number"};
+    } else {
+        item.price = Number(item.price);
+    }
+
+    if (item) {
+        // Remove item from marketplace
+        await Marketplaces.deleteOne({
+            _id: new ObjectId(body.id),
+        });
+
+
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -55,6 +125,7 @@ export async function buyMarketplaceItem(
 
     // Get item from id
     const item = await Marketplaces.findOne<Marketplace>({_id: new ObjectId(body.id)});
+    const itemDataFromShop = await Shops.findOne<Shop>({_id: new ObjectId(item?.itemShopId)});
 
     // Get user inventory and add item
     const inventory = await Inventory.findOne<InventoryType>({
@@ -64,6 +135,10 @@ export async function buyMarketplaceItem(
         return {message: "Inventory not found"};
     }
 
+    if (!itemDataFromShop) {
+        return {message: "Item not found in shop"};
+    }
+
     if (item) {
         // Check if user has enough slots
         if (inventory?.items?.length >= user.slots_number) {
@@ -71,7 +146,7 @@ export async function buyMarketplaceItem(
         }
 
         // Update user slots, money
-        await updateUserAfterBuy(user, item);
+        await updateUserAfterBuy(user, itemDataFromShop, "buy", item.price);
 
         // Update user XP
         // await updateUserXP(user, item.xp || 0);
@@ -79,8 +154,11 @@ export async function buyMarketplaceItem(
         // Update user slots
         // await updateUserSlots(user, item.xp || 0);
 
-        // Add item to user inventory
+        await refundItemToSeller(req);
+
         await addItemToInventory(req);
+
+        await removeItemFromMarketplace(req);
 
         return {message: "Item bought"};
     } else {
@@ -106,8 +184,6 @@ export async function sellMarketplaceItem(
         return {message: "Inventory not found"};
     }
 
-    console.log(item);
-
     if (item) {
         // Check if item exists in inventory
         const itemExists = inventory.items.find((item) => {
@@ -116,8 +192,6 @@ export async function sellMarketplaceItem(
         if (!itemExists) {
             return {message: "Item not found in inventory"};
         }
-
-        console.log(itemExists);
 
         // Update user slots, money
         await updateUserAfterBuy(user, item, "sell");
@@ -161,6 +235,13 @@ export async function addItemToMarketplace(
         return {message: "Item not found in inventory"};
     }
 
+    // Convert body.price to number and if it's not a number, return error
+    if (isNaN(Number(body.price))) {
+        return {message: "Price is not a number"};
+    } else {
+        body.price = Number(body.price);
+    }
+
     if (item) {
         // Add item to marketplace
         await Marketplaces.insertOne({
@@ -171,6 +252,7 @@ export async function addItemToMarketplace(
             generate_per_seconds: item.generate_per_seconds,
             level: itemStats.level,
             selledBy: new ObjectId(user._id),
+            itemShopId: new ObjectId(body.id)
         });
 
         return true;
